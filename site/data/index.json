@@ -1,0 +1,14 @@
+[
+ {
+  "id": "c8i",
+  "label": "Intel Xeon 6975P-C, Granite Rapids (c8i.4xlarge)"
+ },
+ {
+  "id": "c8a",
+  "label": "AMD EPYC 9R45, Zen 5 (c8a.4xlarge)"
+ },
+ {
+  "id": "c8g",
+  "label": "AWS Graviton4, Neoverse V2 (c8g.4xlarge)"
+ }
+]

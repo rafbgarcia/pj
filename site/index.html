@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pj JSON benchmarks</title>
+<meta name="description" content="pj vs yyjson vs simdjson on Intel Granite Rapids, AMD Zen 5 and AWS Graviton4: throughput, cold parse, memory, CPU and hardware counters across document sizes.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="viz-root">
+  <header class="head">
+    <h1>pj JSON benchmarks</h1>
+    <p class="lede">pj vs yyjson and simdjson on three CPUs, five kinds of JSON, and documents from 1&nbsp;KB to 256&nbsp;MB.
+      Every number is a median over repeated runs in fresh processes, and every parser's traversal checksum must agree.</p>
+    <p class="meta" id="meta"></p>
+  </header>
+
+  <section class="filters" aria-label="Filters">
+    <label>Machine <select id="machine"></select></label>
+    <label>Metric <select id="metric"></select></label>
+    <label class="check"><input type="checkbox" id="showTable"> Table view</label>
+    <a class="raw" id="raw" href="#">Raw results (JSON)</a>
+  </section>
+  <p class="metric-note" id="metricNote"></p>
+
+  <section class="summary" aria-labelledby="sumTitle">
+    <h2 id="sumTitle">pj vs the best other parser</h2>
+    <p class="sub" id="sumSub"></p>
+    <div class="tablewrap"><table id="summary"></table></div>
+  </section>
+
+  <section aria-labelledby="chartsTitle">
+    <h2 id="chartsTitle">By document size</h2>
+    <div class="legend" id="legend" role="list"></div>
+    <div class="grid" id="charts"></div>
+  </section>
+
+  <section id="tableSec" hidden aria-labelledby="tableTitle">
+    <h2 id="tableTitle">All results</h2>
+    <div class="tablewrap"><table id="full"></table></div>
+  </section>
+
+  <section class="method" aria-labelledby="methodTitle">
+    <h2 id="methodTitle">Method</h2>
+    <ul>
+      <li><b>Parsers.</b> yyjson (DOM), simdjson DOM, simdjson On-Demand, pj on one thread (<code>pj-1t</code>) and pj on all cores (<code>pj</code>).
+        Same compiler and flags for all (<code>-O3 -march/-mcpu=native</code>), library commits pinned. simdjson picks its best kernel at runtime.</li>
+      <li><b>Process isolation.</b> Each (parser, file, round) runs in a fresh process. There are 3 rounds, each running the parsers in a different random order, and every metric is the median across rounds. The tooltip shows the spread within a run: the interquartile range of the samples.</li>
+      <li><b>Cold.</b> The first parse in that fresh process, so it includes page faults and first-touch allocation. This is what a one-shot load (a CLI or a request handler's first document) pays.</li>
+      <li><b>Parse.</b> Steady state, until the document is ready to query. The time budget is 1&nbsp;s per measurement loop, with at least 5 samples. Each sample is the mean of enough back-to-back documents to last at least 200&nbsp;µs, so timer overhead stays below 0.1%.
+        For simdjson On-Demand, parsing is lazy (the work happens when values are read), so compare it on <i>end-to-end</i>.</li>
+      <li><b>End-to-end.</b> Parse, then visit every value (numbers summed, string and key bytes counted), then free. This is the whole cost of using a document once. simdjson reuses its parser buffers, as its documentation recommends, so its free costs nothing.
+        pj reuses its buffers the same way: freed tape mappings and worker contexts (shapes) are cached for the next document.</li>
+      <li><b>Memory.</b> Peak memory during the cold parse and walk, above the footprint just before it, divided by the input size. The input buffer is excluded; worker threads and their stacks are included.
+        The peak is reset right before the parse: on Linux with <code>/proc/self/clear_refs</code> and <code>VmHWM</code>, on macOS with the footprint interval maximum.
+        Shown for documents of 256&nbsp;KB and up, because page granularity makes smaller ones meaningless. Linux transparent huge pages are in their default <code>madvise</code> mode. pj requests them only for documents of 16&nbsp;MB and up, and only where its tape is written densely.</li>
+      <li><b>CPU.</b> CPU time of all threads (user + system) per document, divided by wall time, which gives the number of cores used. It includes pj's worker threads spinning briefly after each job.</li>
+      <li><b>Counters.</b> Cycles, instructions and branch misses per input byte for single-threaded parsers. On Linux they come from <code>perf_event</code> on the measuring thread; on macOS from <code>proc_pid_rusage</code>, which gives no branch misses.</li>
+      <li><b>Pinning and machines.</b> On Linux, single-threaded parsers are pinned to CPU 2. The machines are AWS <code>c8i.4xlarge</code>, <code>c8a.4xlarge</code> and <code>c8g.4xlarge</code> on-demand instances in us-east-1 (Ubuntu 24.04, clang 18).
+        Cloud VMs do not expose frequency control, so the numbers include turbo behavior.</li>
+      <li><b>Data.</b> Five deterministic families, each filled to a ladder of sizes from repeating element pools, so every machine parses identical bytes. Generator, runner and raw results are in the repository (<code>pj/suite</code>).</li>
+    </ul>
+  </section>
+</main>
+<div class="tip" id="tip" role="tooltip" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>

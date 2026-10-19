@@ -1,0 +1,44 @@
+name: pj
+on:
+  push:
+    paths: ["pj/**", ".github/workflows/pj.yml"]
+  pull_request:
+    paths: ["pj/**", ".github/workflows/pj.yml"]
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-24.04, name: linux-x64-avx2, march: "-march=haswell"}
+          - {os: ubuntu-24.04-arm, name: linux-arm64-neon, march: "-mcpu=neoverse-n1"}
+          - {os: macos-15, name: macos-arm64-neon, march: "-mcpu=apple-m1"}
+          - {os: ubuntu-24.04, name: linux-x64-scalar, march: "-march=x86-64-v2", defs: "-DPJ_FORCE_SCALAR"}
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: bench/vendor
+          key: vendor-${{ hashFiles('pj/build.sh') }}
+      - name: correctness
+        env: {PJ_MARCH: "${{ matrix.march }}", PJ_DEFS: "${{ matrix.defs }}"}
+        run: pj/tests/run.sh
+
+  # Native x64: exercises the AVX-512 (BW/VL, VBMI) paths when the runner CPU has them.
+  linux-x64-native:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: bench/vendor
+          key: vendor-${{ hashFiles('pj/build.sh') }}
+      - name: cpu
+        run: grep -m1 "model name" /proc/cpuinfo; grep -o -w "avx512bw\|avx512vbmi" /proc/cpuinfo | sort -u
+      - name: correctness
+        env: {PJ_MARCH: "-march=native"}
+        run: pj/tests/run.sh
